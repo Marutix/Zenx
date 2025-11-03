@@ -5,7 +5,7 @@ import asyncio
 import os
 import sys
 import signal
-from typing import List
+from typing import List, Optional
 
 import discord
 from discord.ext import commands
@@ -45,7 +45,7 @@ MENU_ITEMS = [
 # ── DISCORD CLIENT (per token) ────────────────────────────────────────
 # ----------------------------------------------------------------------
 class RaidClient(discord.Client):
-    def __init__(self, token: str, message: str, guild_id: int | None):
+    def __init__(self, token: str, message: str, guild_id: Optional[int] = None):
         intents = discord.Intents.default()
         intents.message_content = True
         super().__init__(intents=intents)
