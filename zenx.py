@@ -120,7 +120,7 @@ def get_choice() -> int:
 async def start_client(client: RaidClient, token: str):
     """Start a client and handle connection"""
     try:
-        await client.start(token)
+        await client.start(token, bot=False)
     except Exception as e:
         print(f"{WHITE}│ [-] {client.user if client.user else 'Client'} failed: {e}{RESET}")
 
@@ -184,7 +184,7 @@ async def svr_raid(loop):
         # Join servers via invite
         for client in online_clients:
             try:
-                await client.http.join_guild(invite_code)
+                await client.http.accept_invite(invite_code)
                 print(f"{WHITE}│ {client.user} joined via invite{RESET}")
             except Exception as e:
                 print(f"{WHITE}│ {client.user} failed join: {e}{RESET}")
