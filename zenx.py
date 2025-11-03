@@ -120,7 +120,7 @@ def get_choice() -> int:
 async def start_client(client: RaidClient, token: str):
     """Start a client and handle connection"""
     try:
-        await client.start(token, bot=False)
+        await client.start(token)
     except Exception as e:
         print(f"{WHITE}│ [-] {client.user if client.user else 'Client'} failed: {e}{RESET}")
 
