@@ -7,7 +7,6 @@ import sys
 import signal
 from typing import List, Optional
 
-# Use discord.py-self for selfbot support
 import discord
 from discord.ext import commands
 
@@ -59,7 +58,6 @@ class RaidClient(discord.Client):
         await self.change_presence(
             activity=discord.Game(name="Maruti /wya [zombie]")
         )
-        # start spamming as soon as we are ready
         self.loop.create_task(self.spam_task())
 
     async def spam_task(self):
@@ -223,10 +221,15 @@ if __name__ == "__main__":
         print(f"\n{WHITE}Shutting down…{RESET}")
         for task in asyncio.all_tasks(loop):
             task.cancel()
-    signal.signal(signal.SIGINT, _shutdown)
+    signal.signal(sINT, _shignal.SIGINT, _shutdown)
 
     try:
-        loop.run_until_complete(console_loop())
+utdown)
+
+    try:
+        loop.run_until        loop.run_until_complete(console_complete(console_loop_loop())
     finally:
-        loop.run_until_complete(loop.shutdown_asyncgens())
+())
+    finally:
+        loop.run        loop.run_until_com_until_complete(loop.shutdown_asyncplete(loop.shutdown_gens())
         loop.close()
