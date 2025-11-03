@@ -117,6 +117,13 @@ def get_choice() -> int:
 # ----------------------------------------------------------------------
 # ── RAID FLOW ─────────────────────────────────────────────────────────
 # ----------------------------------------------------------------------
+async def start_client(client: RaidClient, token: str):
+    """Start a client and handle connection"""
+    try:
+        await client.start(token)
+    except Exception as e:
+        print(f"{WHITE}│ [-] {client.user if client.user else 'Client'} failed: {e}{RESET}")
+
 async def svr_raid(loop):
     # 1. tokens
     tokens_str = input(f"{WHITE}Comma-separated user tokens: {RESET}").strip()
@@ -124,6 +131,35 @@ async def svr_raid(loop):
         print(f"{WHITE}No tokens – aborting.{RESET}")
         return
     tokens = [t.strip() for t in tokens_str.split(",") if t.strip()]
+
+    # Start all clients immediately
+    clients: List[RaidClient] = []
+    client_tasks = []
+    
+    print(f"{WHITE}│ Starting {len(tokens)} clients...{RESET}")
+    
+    for tok in tokens:
+        # Create client with empty message for now
+        client = RaidClient(tok, "", None)
+        clients.append(client)
+        # Start client in background
+        task = loop.create_task(start_client(client, tok))
+        client_tasks.append(task)
+        await asyncio.sleep(0.5)  # Small delay between starting clients
+
+    # Wait a moment for clients to connect
+    print(f"{WHITE}│ Waiting for clients to come online...{RESET}")
+    await asyncio.sleep(3)
+
+    # Count how many clients successfully connected
+    online_clients = [c for c in clients if c.is_ready()]
+    print(f"{WHITE}│ {len(online_clients)}/{len(clients)} clients online{RESET}")
+
+    if not online_clients:
+        print(f"{WHITE}│ No clients connected – aborting.{RESET}")
+        for client in clients:
+            await client.close()
+        return
 
     # 2. ask if already in server
     while True:
@@ -145,27 +181,8 @@ async def svr_raid(loop):
         invite = f"https://discord.gg/{invite_code}"
         print(f"{WHITE}Joining via {invite} …{RESET}")
 
-    # 3. message to spam
-    message = input(f"{WHITE}Message to send: {RESET}").strip()
-    if not message:
-        print(f"{WHITE}Empty message – aborting.{RESET}")
-        return
-
-    # ------------------------------------------------------------------
-    # Start all clients
-    # ------------------------------------------------------------------
-    clients: List[RaidClient] = []
-    for tok in tokens:
-        client = RaidClient(tok, message, guild_id)
-        clients.append(client)
-        loop.create_task(client.start(tok, bot=False))
-
-    # give a moment for logins
-    await asyncio.sleep(3)
-
-    # If we need to join via invite
-    if in_srv == "n":
-        for client in clients:
+        # Join servers via invite
+        for client in online_clients:
             try:
                 await client.http.join_guild(invite_code)
                 print(f"{WHITE}│ {client.user} joined via invite{RESET}")
@@ -173,19 +190,25 @@ async def svr_raid(loop):
                 print(f"{WHITE}│ {client.user} failed join: {e}{RESET}")
             await asyncio.sleep(0.5)
 
-        # fetch the guild id after joining (first client that succeeded)
-        for client in clients:
+        # Fetch the guild id after joining (first client that succeeded)
+        for client in online_clients:
             if client.guilds:
                 guild_id = client.guilds[0].id
-                # propagate to all other clients
-                for c in clients:
-                    c.target_guild_id = guild_id
                 print(f"{WHITE}│ Detected guild id: {guild_id}{RESET}")
                 break
 
-    # update all clients with final guild id
-    for c in clients:
+    # 3. message to spam
+    message = input(f"{WHITE}Message to send: {RESET}").strip()
+    if not message:
+        print(f"{WHITE}Empty message – aborting.{RESET}")
+        for client in clients:
+            await client.close()
+        return
+
+    # Update all clients with final guild id and message
+    for c in online_clients:
         c.target_guild_id = guild_id
+        c.spam_msg = message
 
     print(f"{WHITE}Raid started – press Ctrl-C to stop.{RESET}")
     # keep the event loop alive
@@ -193,6 +216,10 @@ async def svr_raid(loop):
         await asyncio.Event().wait()
     except KeyboardInterrupt:
         pass
+    finally:
+        # Cleanup
+        for client in clients:
+            await client.close()
 
 # ----------------------------------------------------------------------
 # ── MAIN LOOP ────────────────────────────────────────────────────────
